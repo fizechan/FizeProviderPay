@@ -1,16 +1,17 @@
 <?php
 
 
-namespace fize\pay;
+namespace fize\provider\pay\handler;
 
-
-use fize\net\Http;
 use Exception;
+use fize\xml\LibXml;
+use fize\xml\SimpleXml;
+use fize\crypt\Json;
+use fize\net\Http;
 
 
 /**
  * 微信支付
- * 将支付功能从third中独立出来
  */
 class Wechat
 {
@@ -161,9 +162,9 @@ class Wechat
      */
     protected function getParam($key)
     {
-        if(isset($this->params[$key])){
+        if (isset($this->params[$key])) {
             return $this->params[$key];
-        }else{
+        } else {
             return null;
         }
     }
@@ -236,8 +237,7 @@ class Wechat
             $string = hash_hmac("sha256", $string, $this->key);
         }
         //签名步骤四：所有字符转为大写
-        $result = strtoupper($string);
-        return $result;
+        return strtoupper($string);
     }
 
     /**
@@ -269,9 +269,9 @@ class Wechat
     {
         //将XML转为array
         //禁止引用外部xml实体
-        libxml_disable_entity_loader(true);
-        $values = json_decode(json_encode(simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
-        if($values === false){
+        LibXml::disableEntityLoader(true);
+        $values = Json::decode(Json::encode(SimpleXml::loadString($xml, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
+        if ($values === false) {
             throw new Exception("将xml转为array时发生错误！");
         }
         return $values;
@@ -286,7 +286,7 @@ class Wechat
     protected function checkSign(array $values)
     {
         $sign = $this->makeSign($values);
-        if($values['sign'] == $sign){
+        if ($values['sign'] == $sign) {
             return true;
         }
         throw new Exception("签名错误！");
@@ -314,19 +314,18 @@ class Wechat
         $xml = $this->toXml($this->params);
 
         //POST
-        $http = new Http();
-        $response = $http->post($url, $xml);
-        if($response === false){
-            throw new Exception("访问URL时发生错误！[{$http->lastErrCode()}]");
+        $response = Http::post($url, $xml);
+        if ($response === false) {
+            throw new Exception(Http::getLastErrMsg(), Http::getLastErrCode());
         }
 
         //验证
-        if($to_array){
+        if ($to_array) {
             $returns = $this->fromXml($response);
-            if(isset($returns['sign'])){
+            if (isset($returns['sign'])) {
                 $this->checkSign($returns);
             }
-        }else{
+        } else {
             $returns = $response;
         }
 
@@ -389,9 +388,9 @@ class Wechat
      */
     public function orderquery($dist_code, $is_out_trade_no = false)
     {
-        if($is_out_trade_no){
+        if ($is_out_trade_no) {
             $this->params['out_trade_no'] = $dist_code;
-        }else{
+        } else {
             $this->params['transaction_id'] = $dist_code;
         }
 
@@ -423,9 +422,9 @@ class Wechat
      */
     public function secapiPayRefund($dist_code, $out_refund_no, $total_fee, $refund_fee, $is_out_trade_no = false)
     {
-        if($is_out_trade_no){
+        if ($is_out_trade_no) {
             $this->params['out_trade_no'] = $dist_code;
-        }else{
+        } else {
             $this->params['transaction_id'] = $dist_code;
         }
         $this->params['out_refund_no'] = $out_refund_no;
@@ -460,13 +459,13 @@ class Wechat
     {
         $this->params['bill_date'] = $bill_date;
         $this->params['bill_type'] = $bill_type;
-        if($gzip){
+        if ($gzip) {
             $this->params['tar_type'] = 'GZIP';
         }
         $response = $this->httpPost($this->urlPre . self::PAY_DOWNLOADBILL_URL, false);
-        if(stripos($response, '<xml>') === 0){  //返回XML格式则是出现错误
+        if (stripos($response, '<xml>') === 0) {  //返回XML格式则是出现错误
             $xml = $this->fromXml($response);
-            if(isset($xml['sign'])){
+            if (isset($xml['sign'])) {
                 $this->checkSign($xml);
             }
             throw new Exception("出现错误：{$xml['return_msg']}");
@@ -483,11 +482,11 @@ class Wechat
     public function payNotify(callable $handle)
     {
         $request = file_get_contents("php://input");
-        if(stripos($request, '<xml>') !== 0){
+        if (stripos($request, '<xml>') !== 0) {
             return $this->toXml(['return_code' => 'FAIL', 'return_msg' => 'POST参数格式错误']);
         }
         $xml = $this->fromXml($request);
-        if(!isset($xml['sign'])){
+        if (!isset($xml['sign'])) {
             return $this->toXml(['return_code' => 'FAIL', 'return_msg' => '缺少参数sign']);
         }
         $this->checkSign($xml);
@@ -510,7 +509,7 @@ class Wechat
         $this->params['execute_time'] = $execute_time;
         $this->params['return_code'] = $return_code;
         $this->params['result_code'] = $result_code;
-        $this->params['user_ip'] = $this-> $this->getClientIp();
+        $this->params['user_ip'] = $this->$this->getClientIp();
         return $this->httpPost($this->urlPre . self::PAYITIL_REPORT_URL);
     }
 
@@ -539,9 +538,9 @@ class Wechat
         $this->params['end_time'] = $end_time;
         $this->params['offset'] = $offset;
         $response = $this->httpPost($this->urlPre . self::BILLCOMMENTSP_BATCHQUERYCOMMENT_URL, false);
-        if(stripos($response, '<xml>') === 0){  //返回XML格式则是出现错误
+        if (stripos($response, '<xml>') === 0) {  //返回XML格式则是出现错误
             $xml = $this->fromXml($response);
-            if(isset($xml['sign'])){
+            if (isset($xml['sign'])) {
                 $this->checkSign($xml);
             }
             throw new Exception("出现错误：{$xml['return_msg']}");
@@ -571,11 +570,11 @@ class Wechat
         }
 
         $params = [
-            'appId' => $this->appId,
+            'appId'     => $this->appId,
             'timeStamp' => time(),
-            'nonceStr' => $this->getRandomStr(16),
-            'package' => "prepay_id={$result['prepay_id']}",
-            'signType' => $this->getParam('sign_type'),
+            'nonceStr'  => $this->getRandomStr(16),
+            'package'   => "prepay_id={$result['prepay_id']}",
+            'signType'  => $this->getParam('sign_type'),
         ];
 
         $sign = $this->makeSign($params);

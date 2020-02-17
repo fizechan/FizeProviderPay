@@ -1,10 +1,14 @@
 <?php
 
 
-namespace fize\pay;
+namespace fize\provider\pay\handler;
+
+use fize\crypt\Json;
+use fize\crypt\Base64;
+use fize\security\OpenSSL;
 
 /**
- * 支付宝支付
+ * 支付宝
  */
 class Alipay
 {
@@ -77,9 +81,9 @@ class Alipay
      */
     public function isTest($test = true)
     {
-        if($test){
+        if ($test) {
             $this->gatewayUrl = self::DEV_GATEWAY_URL;
-        }else{
+        } else {
             $this->gatewayUrl = self::GATEWAY_URL;
         }
     }
@@ -181,8 +185,8 @@ class Alipay
         $i = 0;
         foreach ($params as $k => $v) {
 
-            if(is_array($v)){  //数组作为JSON字符串解析
-                $v = json_encode($v, JSON_UNESCAPED_UNICODE);
+            if (is_array($v)) {  //数组作为JSON字符串解析
+                $v = Json::encode($v, JSON_UNESCAPED_UNICODE);
             }
 
             if (false === $this->checkEmpty($v) && "@" != substr($v, 0, 1)) {
@@ -207,9 +211,9 @@ class Alipay
     {
         $i = 0;
         $stringToBeSigned = "";
-        foreach ($params as $k => $v){
+        foreach ($params as $k => $v) {
 
-            if(is_array($v)){  //数组作为JSON字符串解析
+            if (is_array($v)) {  //数组作为JSON字符串解析
                 $v = json_encode($v, JSON_UNESCAPED_UNICODE);
             }
 
@@ -237,12 +241,14 @@ class Alipay
             wordwrap($priKey, 64, "\n", true) .
             "\n-----END RSA PRIVATE KEY-----";
 
+        $openssl = new OpenSSL();
+        $openssl->setPrivateKey($res, false);
         if ("RSA2" == $signType) {
-            openssl_sign($data, $sign, $res, OPENSSL_ALGO_SHA256);
+            $sign = $openssl->sign($data, OPENSSL_ALGO_SHA256);
         } else {
-            openssl_sign($data, $sign, $res);
+            $sign = $openssl->sign($data);
         }
-        $sign = base64_encode($sign);
+        $sign = Base64::encode($sign);
         return $sign;
     }
 
@@ -275,11 +281,12 @@ class Alipay
      * @param string $signType
      * @return bool
      */
-    public function rsaCheck($params, $signType='RSA2') {
+    public function rsaCheck($params, $signType = 'RSA2')
+    {
         $sign = $params['sign'];
         $params['sign_type'] = null;
         $params['sign'] = null;
-        return $this->verify($this->getSignContent($params), $sign,$signType);
+        return $this->verify($this->getSignContent($params), $sign, $signType);
     }
 
     /**
@@ -287,24 +294,25 @@ class Alipay
      * @param array $para_temp 请求参数数组
      * @return string 提交表单HTML文本
      */
-    protected function buildRequestForm(array $para_temp) {
-        $sHtml = "<form id='alipaysubmit' name='alipaysubmit' action='" . $this->gatewayUrl . "?charset=".trim($this->params['charset'])."' method='POST'>";
-        foreach ($para_temp as $key => $val){
+    protected function buildRequestForm(array $para_temp)
+    {
+        $sHtml = "<form id='alipaysubmit' name='alipaysubmit' action='" . $this->gatewayUrl . "?charset=" . trim($this->params['charset']) . "' method='POST'>";
+        foreach ($para_temp as $key => $val) {
 
-            if(is_array($val)){  //数组作为JSON字符串解析
-                $val = json_encode($val, JSON_UNESCAPED_UNICODE);
+            if (is_array($val)) {  //数组作为JSON字符串解析
+                $val = Json::encode($val, JSON_UNESCAPED_UNICODE);
             }
 
             if (false === $this->checkEmpty($val)) {
                 //$val = $this->characet($val, $this->postCharset);
-                $val = str_replace("'","&apos;",$val);
+                $val = str_replace("'", "&apos;", $val);
                 //$val = str_replace("\"","&quot;",$val);
-                $sHtml.= "<input type='hidden' name='".$key."' value='".$val."'/>";
+                $sHtml .= "<input type='hidden' name='" . $key . "' value='" . $val . "'/>";
             }
         }
         //submit按钮控件请不要含有name属性
-        $sHtml = $sHtml."<input type='submit' value='ok' style='display:none;''></form>";
-        $sHtml = $sHtml."<script>document.forms['alipaysubmit'].submit();</script>";
+        $sHtml = $sHtml . "<input type='submit' value='ok' style='display:none;''></form>";
+        $sHtml = $sHtml . "<script>document.forms['alipaysubmit'].submit();</script>";
         return $sHtml;
     }
 
